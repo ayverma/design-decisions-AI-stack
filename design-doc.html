@@ -1,0 +1,888 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>OdataLink AI Stack — Design Decisions</title>
+<meta name="description" content="Interactive design / specification document. Editable in browser, AI-ingestible via embedded JSON-LD schema, cloneable as template for new projects." />
+
+<!--
+  OPT-IN: uncomment the line below to swap ~150 lines of custom CSS for Pico.css (~10 KB gzip).
+  Trade-off: adds 1 CDN dep (fails offline). Comment back to restore custom styling.
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+-->
+
+<!--
+====================================================================================
+  AI / TEMPLATE NOTE
+  This file is both an interactive UI for humans AND an AI-readable spec.
+  - For AI chatbots: read the <script type="application/ld+json" id="design-schema">
+    block below. It is the single source of truth. ~2K tokens, full schema + state.
+  - For template reuse: edit the JSON-LD block; everything else reads from it.
+  - For humans: open in any browser. localStorage persists state. No backend.
+====================================================================================
+-->
+
+<!-- ===== SINGLE SOURCE OF TRUTH ============================================== -->
+<script type="application/ld+json" id="design-schema">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "version": "1.1.0",
+  "lastUpdated": "2026-05-13",
+  "project": {
+    "name": "OdataLink AI Stack",
+    "purpose": "Enable any non-technical Xero / MYOB / QuickBooks user to build trustworthy accounting apps (reports, dashboards, Python notebooks, Excel, live web apps) via a chatbot + OdataLink OData feeds.",
+    "successCriteria": [
+      "Numbers always tie to source-of-truth control totals (Xero/MYOB).",
+      "Same prompt + same data → same answer every time (deterministic via Report Spec IR).",
+      "Same mistake never repeats per feed (Correction Memory).",
+      "Non-technical user can install + use in under 30 minutes.",
+      "No Power Apps. Templates AI can edit (Streamlit/Blazor/Retool/Open WebUI)."
+    ],
+    "layers": [
+      {"id": "L0", "name": "Foundation",  "count": 2},
+      {"id": "L1", "name": "Knowledge",   "count": 3},
+      {"id": "L2", "name": "Generation",  "count": 3},
+      {"id": "L3", "name": "Storage",     "count": 2},
+      {"id": "L4", "name": "UX",          "count": 3},
+      {"id": "L5", "name": "Learning",    "count": 2}
+    ]
+  },
+  "decisions": [
+    {"id": "d1",  "title": "Single MCP server for OdataLink (not many)", "body": "One TS / C#-.NET / Python MCP holds many feeds + auth + session. AI calls typed tools, no URL guessing.", "refs": "A1, L0.1"},
+    {"id": "d2",  "title": "OS keystore for credentials (not env files)", "body": "Win Credential Manager / macOS Keychain / libsecret. Creds never in chat context.", "refs": "A2"},
+    {"id": "d3",  "title": "ID-priority FK detection for joins", "body": "Score columns by regex + datatype + uniqueness. ID joins always win over name match.", "refs": "A3, L0.2"},
+    {"id": "d4",  "title": "CoA classifier with completeness gate (blocks Validator on missed accounts)", "body": "SQLite cache per feed. AI must iterate full classified set, never reference by name alone.", "refs": "A3, L1.1"},
+    {"id": "d5",  "title": "Report Spec JSON Schema as canonical IR", "body": "One contract consumed by all generators + validator. Deterministic outputs.", "refs": "A6, L2.1"},
+    {"id": "d6",  "title": "Independent Validator (separate process, AI cannot bypass)", "body": "Standalone CLI. Fetches control totals via own OData call. Blocks output on mismatch.", "refs": "A8, L2.3 ⭐"},
+    {"id": "d7",  "title": "Second-LLM crosscheck via Codex MCP (optional toggle)", "body": "Route validator output to a different model for sanity check. Auditor-grade trust.", "refs": "A8 subitem"},
+    {"id": "d8",  "title": "Notion only for mapping + recipes (not bulk data)", "body": "Bulk transactional data goes to user-chosen DB via Adapter. Notion = human-curated metadata.", "refs": "A5, A11"},
+    {"id": "d9",  "title": "Uniform DB Adapter interface across Neon/Cockroach/Cassandra/Graph/Azure SQL/Access", "body": "AI sees only the interface. AWS Boto / EF Core / psycopg pluggable.", "refs": "A9, L3.1"},
+    {"id": "d10", "title": "Correction Memory with chromadb top-K retrieval", "body": "Pre-inject relevant past corrections into every generation prompt.", "refs": "A14, L5.1"},
+    {"id": "d11", "title": "Regression Harness with LLM-as-judge + Codex auto-test-gen", "body": "pytest golden set + semantic grading + auto-add new failures.", "refs": "A15, L5.2"},
+    {"id": "d12", "title": "Chatbot frontend = Open WebUI default (LibreChat / Blazor / Claude Desktop alts)", "body": "Self-hosted, MCP-aware, model-agnostic. Preserves user data locality.", "refs": "A13, L4.3"},
+    {"id": "d13", "title": "Schema-drift auto-pause for pipelines", "body": "$metadata diff per run. New columns → pause + Monday notification.", "refs": "A10, L3.2"},
+    {"id": "d14", "title": "Strict $0.00 validator tolerance by default (auditor-friendly)", "body": "Override per Report Spec only. Loose tolerance flagged in audit trail.", "refs": "A8, Tunable"},
+    {"id": "d15", "title": "Multi-feed registry with active-feed pointer (single session)", "body": "Multi-tenant or multi-entity within one MCP. No re-auth per turn.", "refs": "A2"}
+  ],
+  "stackLayers": [
+    {"id": "mcp",        "label": "L0 — MCP Servers",         "options": ["TypeScript", "C#/.NET", "Python", "Rust"]},
+    {"id": "parser",     "label": "L0 — $metadata parser",    "options": ["Python", "C#/.NET (Microsoft.OData.Edm)", "TypeScript"]},
+    {"id": "knowledge",  "label": "L1 — Knowledge skills",    "options": ["Python", "C#/.NET", "TypeScript"]},
+    {"id": "generators", "label": "L2 — Output generators",   "options": ["Python (openpyxl)", "C#/.NET (ClosedXML)", "Node (SheetJS)"]},
+    {"id": "validator",  "label": "L2 — Validator",           "options": ["Python CLI", "C#/.NET console", "Second-LLM (Codex MCP)", "Deterministic-only"]},
+    {"id": "adapters",   "label": "L3 — DB Adapters",         "options": ["Python (psycopg/pyodbc)", "C#/.NET (EF Core)", "Node (pg/mssql)", "AWS-native (boto3 / SDK for .NET)"]},
+    {"id": "orch",       "label": "L3 — Orchestrator",        "options": ["Python APScheduler", "n8n (visual)", "C#/.NET Hangfire", "AWS Step Functions / Azure Durable"]},
+    {"id": "dashboard",  "label": "L4 — Live dashboards",     "options": ["Streamlit", "Retool / Appsmith", "C#/.NET Blazor", "Next.js"]},
+    {"id": "frontend",   "label": "L4 — Chatbot frontend",    "options": ["Open WebUI", "LibreChat", "C#/.NET Semantic Kernel + Blazor", "Claude Desktop (POC)"]},
+    {"id": "memory",     "label": "L5 — Memory store",        "options": ["SQLite + chromadb", "Postgres + pgvector", "C#/.NET LiteDB + SK", "Redis Vector Sets"]},
+    {"id": "regress",    "label": "L5 — Regression CI",       "options": ["pytest + GitHub Actions", "C#/.NET xUnit + Azure DevOps", "LLM-as-judge hybrid"]}
+  ],
+  "tunables": [
+    {"id": "tol",          "label": "Validator tolerance ($)",          "min": 0,    "max": 100,    "step": 0.01, "default": 0.00,  "desc": "Allowed mismatch between row sum and control total. Strict = 0.00."},
+    {"id": "cache_ttl",    "label": "Query cache TTL (minutes)",        "min": 1,    "max": 1440,   "step": 1,    "default": 60,    "desc": "How long to reuse OData query results before re-fetching."},
+    {"id": "regress",      "label": "Regression run frequency (hours)", "min": 1,    "max": 168,    "step": 1,    "default": 24,    "desc": "How often the golden-set harness runs."},
+    {"id": "top_k",        "label": "Top-K corrections retrieved",      "min": 1,    "max": 20,     "step": 1,    "default": 5,     "desc": "Past corrections injected into each generation prompt."},
+    {"id": "judge_w",      "label": "LLM-as-judge weight (0-1)",        "min": 0,    "max": 1,      "step": 0.05, "default": 0.30,  "desc": "How much the semantic judge weighs vs deterministic check. 0 = deterministic only."},
+    {"id": "lock_buf",     "label": "Period lock buffer (days)",        "min": 0,    "max": 60,     "step": 1,    "default": 7,     "desc": "Warn user if requested period ends within N days of unlocked range."},
+    {"id": "token_budget", "label": "Per-generation token budget",      "min": 1000, "max": 200000, "step": 500,  "default": 32000, "desc": "Soft cap on AI context per prompt. Above this, summarisation kicks in."}
+  ],
+  "monday": {
+    "primaryBoard":  "5028437706",
+    "boardName":     "AI Apps for ODL users",
+    "groups": {
+      "development":  "group_mm39hn7k",
+      "userWorkflow": "group_mm39msdd",
+      "architecture": "group_mm39tjxk"
+    },
+    "columns": {
+      "designNotes":   "long_text_mm39tng",
+      "starterPrompt": "long_text_mm39wz1q",
+      "codeExcerpt":   "long_text_mm39dzya"
+    }
+  }
+}
+</script>
+<!-- ▶ AI: end of design content. The rest of this file is CSS + UI plumbing. STOP reading here unless asked to modify the renderer itself. -->
+
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel-2: #1f242d; --line: #2a313d;
+    --text: #e5e9f0; --muted: #8a93a4; --accent: #7aa2ff;
+    --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; --pill: #2b3242;
+    --radius: 10px;
+  }
+  [data-theme="light"] {
+    --bg: #f6f7fb; --panel: #fff; --panel-2: #f0f2f7; --line: #d9dde6;
+    --text: #1b1f27; --muted: #5b6478; --pill: #e6e9f0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  a { color: var(--accent); text-decoration: none; }
+  header.top {
+    position: sticky; top: 0; z-index: 10; background: var(--panel); border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 12px; padding: 12px 20px; flex-wrap: wrap;
+  }
+  header.top h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  header.top .spacer { flex: 1; }
+  header.top button { background: var(--pill); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font: inherit; font-size: 13px; }
+  header.top button:hover { border-color: var(--accent); }
+  header.top button.primary { background: var(--accent); color: #0a0d14; border-color: var(--accent); font-weight: 600; }
+  nav.tabs { display: flex; gap: 4px; padding: 0 20px; background: var(--panel); border-bottom: 1px solid var(--line); overflow-x: auto; }
+  nav.tabs button { background: none; border: none; color: var(--muted); padding: 12px 14px; cursor: pointer; font: inherit; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav.tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 20px 80px; }
+  section.tab { display: none; }
+  section.tab.active { display: block; }
+  .hero { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+  .card h2 { margin: 0 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); font-weight: 600; }
+  .card h3 { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--pill); color: var(--text); font-size: 11px; font-weight: 600; margin-right: 4px; }
+  .pill.ok   { background: rgba(74,222,128,.15); color: var(--ok); }
+  .pill.warn { background: rgba(251,191,36,.15); color: var(--warn); }
+  .pill.bad  { background: rgba(248,113,113,.15); color: var(--bad); }
+  @media (max-width: 880px) { .hero { grid-template-columns: 1fr; } }
+
+  .decision { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px; }
+  .decision .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .decision .title { font-weight: 600; flex: 1 1 auto; }
+  .decision .meta { color: var(--muted); font-size: 12px; }
+  .decision .body { color: var(--muted); margin: 8px 0 12px; font-size: 13px; }
+  .decision textarea { width: 100%; min-height: 56px; resize: vertical; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: inherit; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg input[type=radio] { display: none; }
+  .seg label { padding: 5px 10px; cursor: pointer; font-size: 12px; color: var(--muted); border-right: 1px solid var(--line); }
+  .seg label:last-of-type { border-right: none; }
+  .seg input[value="approve"]:checked + label { background: rgba(74,222,128,.18); color: var(--ok); }
+  .seg input[value="deny"]:checked    + label { background: rgba(248,113,113,.18); color: var(--bad); }
+  .seg input[value="hold"]:checked    + label { background: rgba(251,191,36,.18); color: var(--warn); }
+
+  table.matrix { width: 100%; border-collapse: collapse; }
+  table.matrix th, table.matrix td { padding: 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  table.matrix th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  table.matrix td.layer { font-weight: 600; }
+  table.matrix label { display: block; padding: 4px 0; cursor: pointer; color: var(--muted); font-size: 13px; }
+  table.matrix label input { margin-right: 6px; }
+  table.matrix label input:checked ~ span { color: var(--accent); font-weight: 600; }
+
+  .tunable { display: grid; grid-template-columns: 220px 1fr 80px; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .tunable:last-child { border-bottom: none; }
+  .tunable .label { font-weight: 600; }
+  .tunable .desc { color: var(--muted); font-size: 12px; }
+  .tunable input[type=range] { width: 100%; }
+  .tunable .val { text-align: right; font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 600; }
+
+  .todo-add { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .todo-add input { flex: 1; min-width: 200px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font: inherit; }
+  .todo-add select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: inherit; }
+  .todo-add button { background: var(--accent); color: #0a0d14; border: none; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 600; }
+  .todo-list { display: grid; gap: 6px; }
+  .todo-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; }
+  .todo-item .grow { flex: 1; }
+  .todo-item .grow b { display: block; }
+  .todo-item .grow .meta { color: var(--muted); font-size: 12px; }
+  .todo-item button { background: none; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 4px 8px; cursor: pointer; font: inherit; font-size: 12px; }
+  .todo-item button.approve:hover { color: var(--ok); border-color: var(--ok); }
+  .todo-item button.deny:hover    { color: var(--bad); border-color: var(--bad); }
+  .todo-item.approved { border-left: 3px solid var(--ok); }
+  .todo-item.denied   { border-left: 3px solid var(--bad); opacity: .55; }
+
+  .log-row { display: grid; grid-template-columns: 130px 1fr 110px 100px; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .log-row:last-child { border-bottom: none; }
+  .log-row .when { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+
+  pre.export { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 12px; overflow-x: auto; max-height: 400px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  details { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; margin: 10px 0; }
+  details summary { cursor: pointer; font-weight: 600; }
+
+  .kpi { display: flex; gap: 16px; flex-wrap: wrap; }
+  .kpi .stat { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; min-width: 110px; }
+  .kpi .stat .v { font-size: 22px; font-weight: 700; }
+  .kpi .stat .l { color: var(--muted); font-size: 12px; }
+
+  .howto { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 14px; }
+  @media (max-width: 880px) { .howto { grid-template-columns: 1fr; } }
+  .howto .card { padding: 14px 16px; }
+  .howto code { background: var(--panel-2); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+
+  .toast { position: fixed; bottom: 20px; right: 20px; background: var(--accent); color: #0a0d14; padding: 10px 16px; border-radius: 8px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.4); display: none; }
+  .toast.show { display: block; animation: pop .25s ease; }
+  @keyframes pop { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+</style>
+</head>
+<body>
+
+<!--
+====================================================================================
+  ▶ AI / LLM INGESTION INSTRUCTIONS (read this block, then act accordingly)
+====================================================================================
+  If you are an AI agent, chatbot, or LLM reading this file as context:
+
+  1. READ ONLY the <script type="application/ld+json" id="design-schema"> block
+     near the top of <head>. It is the single source of truth for project intent,
+     decisions, stack layers, tunables, and Monday board references.
+     Approximate cost: ~2,000 tokens (vs ~10,000 for full file).
+
+  2. SKIP entirely:
+     • All <style>…</style> blocks — visual rendering only, no semantic info.
+     • All <script>…</script> blocks EXCEPT the JSON-LD one above.
+       The other scripts are UI plumbing (render loops, event handlers,
+       localStorage I/O). They contain no design content. Reading them wastes
+       tokens and adds noise to your reasoning.
+     • HTML structural markup (<div>, <section>, <table>, class/style attrs).
+
+  3. IF you need the user's CURRENT state (their picks, approvals, slider values,
+     todos), ask the user to click "📋 AI ctx (md)" or "📋 AI ctx (json)" in the
+     header and paste the result. That is a pre-computed compact summary of the
+     JSON-LD schema MERGED with state from the user's browser localStorage —
+     which is not present in this file on disk.
+
+  4. WHEN PROPOSING CHANGES: emit a JSON delta against the schema (add/edit/remove
+     entries in decisions / stackLayers / tunables / project). The user will paste
+     it into the Schema Editor tab and click Apply. Do not regenerate the whole
+     HTML file unless explicitly asked.
+
+  5. WHEN ASKED to extend functionality (new section type, new export format):
+     the JSON-LD schema is data; the <script> at the bottom is the renderer.
+     Touch only what is needed. Default to adding a new top-level array in the
+     schema + one render function, not rewriting everything.
+
+  Estimated savings by following these rules: ~75% input-token reduction vs
+  reading the whole file naively. Hallucinations drop too — less irrelevant
+  context = sharper inference.
+====================================================================================
+-->
+
+<header class="top">
+  <h1 id="hdr-title">OdataLink AI Stack — Design Decisions</h1>
+  <span class="spacer"></span>
+  <button onclick="toggleTheme()" title="Toggle dark/light">🌗</button>
+  <button onclick="copyAIContext('markdown')" title="Copy AI context (compact markdown, ~1.5K tokens)">📋 AI ctx (md)</button>
+  <button onclick="copyAIContext('json')" title="Copy AI context (JSON-LD + state, ~2K tokens)">📋 AI ctx (json)</button>
+  <button onclick="downloadTemplate()" title="Download blank template HTML for a new project">💾 Template</button>
+  <button class="primary" onclick="exportState()" title="Export current state JSON">⤓ Export</button>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="overview" class="active">Overview</button>
+  <button data-tab="decisions">Macro Decisions</button>
+  <button data-tab="stack">Stack Matrix</button>
+  <button data-tab="tunables">Tunables</button>
+  <button data-tab="todo">Project To-Do</button>
+  <button data-tab="log">Decision Log</button>
+  <button data-tab="reuse">Reuse / AI Context</button>
+  <button data-tab="editor">Schema Editor</button>
+</nav>
+
+<main>
+  <!-- =================== OVERVIEW =================== -->
+  <section class="tab active" id="tab-overview">
+    <div class="hero">
+      <div class="card">
+        <h2>Vision</h2>
+        <h3 id="vision-headline">Any non-technical OdataLink user builds trustworthy accounting apps via a chatbot.</h3>
+        <p style="color:var(--muted)" id="vision-body"></p>
+        <div class="kpi" style="margin-top:16px">
+          <div class="stat"><div class="v" id="kpi-approved">0</div><div class="l">Decisions approved</div></div>
+          <div class="stat"><div class="v" id="kpi-pending">0</div><div class="l">Pending / hold</div></div>
+          <div class="stat"><div class="v" id="kpi-todo">0</div><div class="l">To-do open</div></div>
+          <div class="stat"><div class="v" id="kpi-plan">0</div><div class="l">In project plan</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Success Criteria</h2>
+        <ul id="success-list" style="color:var(--muted);padding-left:18px;margin:0"></ul>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Three Ways To Consume This Doc</h2>
+      <div class="howto">
+        <div class="card">
+          <h3>👤 Human</h3>
+          <p style="color:var(--muted);font-size:13px">Open in browser. Click through tabs. Approve / deny decisions, set sliders, add to-do items. State persists in <code>localStorage</code>.</p>
+        </div>
+        <div class="card">
+          <h3>🤖 AI Chatbot</h3>
+          <p style="color:var(--muted);font-size:13px">Click <b>AI ctx (md)</b> or <b>AI ctx (json)</b> in the header. Paste into your chatbot. Schema + current state → AI gets full context in ~1.5-2K tokens (vs ~9K for full HTML).</p>
+        </div>
+        <div class="card">
+          <h3>📋 Template</h3>
+          <p style="color:var(--muted);font-size:13px">Click <b>💾 Template</b> to download a blank copy (no project specifics, no state). Edit the <code>&lt;script id="design-schema"&gt;</code> block at the top to fit a new project. Done.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== DECISIONS =================== -->
+  <section class="tab" id="tab-decisions">
+    <div class="card">
+      <h2>Macro Architecture Decisions</h2>
+      <p style="color:var(--muted)">Approve / hold / deny each. Comment captures rationale. These cascade into Monday items + subitems via the JSON export.</p>
+    </div>
+    <div id="decisions-list"></div>
+  </section>
+
+  <!-- =================== STACK MATRIX =================== -->
+  <section class="tab" id="tab-stack">
+    <div class="card">
+      <h2>Implementation Stack Per Layer</h2>
+      <p style="color:var(--muted)">One pick per layer. Determines which alt-stack subitems become Active vs Archived in Monday.</p>
+      <table class="matrix" id="stack-matrix"></table>
+    </div>
+  </section>
+
+  <!-- =================== TUNABLES =================== -->
+  <section class="tab" id="tab-tunables">
+    <div class="card">
+      <h2>System Tunables</h2>
+      <p style="color:var(--muted)">Drag to set defaults. Values export into MCP server config, validator CLI flags, scheduler cron, and frontend system prompt.</p>
+      <div id="tunables-list"></div>
+    </div>
+  </section>
+
+  <!-- =================== TO-DO =================== -->
+  <section class="tab" id="tab-todo">
+    <div class="card">
+      <h2>Project To-Do (pre-approval queue)</h2>
+      <div class="todo-add">
+        <input id="todo-title" placeholder="New deliberation item (e.g. 'Add Cosmos DB adapter')" />
+        <select id="todo-scope">
+          <option value="macro">Macro</option>
+          <option value="component">Component</option>
+          <option value="subitem">Subitem</option>
+          <option value="sub-subitem">Sub-subitem</option>
+        </select>
+        <button onclick="addTodo()">Add</button>
+      </div>
+      <div class="todo-list" id="todo-list"></div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h2>Project Plan (approved)</h2>
+      <div class="todo-list" id="plan-list"></div>
+    </div>
+  </section>
+
+  <!-- =================== DECISION LOG =================== -->
+  <section class="tab" id="tab-log">
+    <div class="card">
+      <h2>Decision Audit Trail</h2>
+      <p style="color:var(--muted)">Last 100 actions. Persists in localStorage. Export to JSON for permanent record.</p>
+      <div class="log-row" style="font-weight:600;color:var(--muted)">
+        <div>When</div><div>Item</div><div>Action</div><div>By</div>
+      </div>
+      <div id="log-list"></div>
+    </div>
+  </section>
+
+  <!-- =================== SCHEMA EDITOR =================== -->
+  <section class="tab" id="tab-editor">
+    <div class="card">
+      <h2>Live Schema Editor</h2>
+      <p style="color:var(--muted)">Edit the JSON-LD schema block directly. Click <b>Validate</b> to check syntax, <b>Apply</b> to re-render UI from changes, <b>Save As HTML</b> to download a new standalone file with your edits baked in.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="primary" onclick="validateEditor()">✓ Validate</button>
+        <button class="primary" onclick="applyEditor()">⚡ Apply (re-render)</button>
+        <button class="primary" onclick="saveAsHTML()">💾 Save As HTML…</button>
+        <button onclick="loadEditorFromSchema()">↺ Reload from current schema</button>
+      </div>
+      <div id="editor-status" style="font-size:13px;margin-bottom:8px;min-height:18px"></div>
+      <textarea id="schema-editor" spellcheck="false"
+        style="width:100%;min-height:520px;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:12px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;tab-size:2"
+      ></textarea>
+      <details style="margin-top:14px">
+        <summary>How to add a new functionality</summary>
+        <ol style="color:var(--muted);font-size:13px">
+          <li><b>New decision</b>: add an object to <code>"decisions"</code> array. Fields: <code>id</code>, <code>title</code>, <code>body</code>, <code>refs</code>. Click Apply.</li>
+          <li><b>New stack layer</b>: add to <code>"stackLayers"</code>. Fields: <code>id</code>, <code>label</code>, <code>options</code> (array of strings).</li>
+          <li><b>New tunable slider</b>: add to <code>"tunables"</code>. Fields: <code>id</code>, <code>label</code>, <code>min</code>, <code>max</code>, <code>step</code>, <code>default</code>, <code>desc</code>.</li>
+          <li><b>Rename project</b>: edit <code>project.name</code> and <code>project.purpose</code>. Header + localStorage key auto-update.</li>
+          <li><b>Add a totally new section type</b> (e.g. risk register, milestones): requires a JS render function. Add the array under a new top-level key in JSON, then ask an AI to wire it up — "extend the renderer to render a 'risks' array as a table". UI auto-rebuilds on Apply.</li>
+        </ol>
+      </details>
+      <details>
+        <summary>Save-As-HTML — what it does</summary>
+        <p style="color:var(--muted);font-size:13px">Generates a new HTML file where the JSON-LD block contains your edited schema, and the localStorage key is renamed so the new file starts with fresh state. Use this to fork the doc for a different project, share read-only snapshots, or version-control a baseline.</p>
+      </details>
+    </div>
+  </section>
+
+  <!-- =================== REUSE / AI CONTEXT =================== -->
+  <section class="tab" id="tab-reuse">
+    <div class="card">
+      <h2>For AI Chatbots — Compact Context</h2>
+      <p style="color:var(--muted)">Two formats. <b>Markdown</b> = smallest, best for chat. <b>JSON-LD</b> = lossless, best for tool use / structured prompts. Both include schema + current state.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="primary" onclick="copyAIContext('markdown')">📋 Copy Markdown context</button>
+        <button class="primary" onclick="copyAIContext('json')">📋 Copy JSON context</button>
+        <button onclick="document.getElementById('ai-preview').textContent = buildMarkdownContext()">👁 Preview markdown</button>
+        <button onclick="document.getElementById('ai-preview').textContent = buildJSONContext()">👁 Preview JSON</button>
+      </div>
+      <pre class="export" id="ai-preview">Click Preview above.</pre>
+      <p style="color:var(--muted);font-size:12px;margin-top:8px"><b>Estimated tokens</b>: full HTML ~9000 · JSON-LD context ~2000 · Markdown context ~1500. Use markdown for chat, JSON for automation.</p>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2>Use As Template For A New Project</h2>
+      <p style="color:var(--muted)">Download a blank copy. Open in a text editor. Edit the <code>&lt;script type="application/ld+json" id="design-schema"&gt;</code> block at the top. That single block drives the entire UI — change project name, vision, decisions, stack layers, tunables. No JS edits needed.</p>
+      <button class="primary" onclick="downloadTemplate()">💾 Download blank template HTML</button>
+      <p style="color:var(--muted);font-size:12px;margin-top:8px">Generated file: <code>design-doc-template.html</code>. State is stripped. Schema kept as example — overwrite the project name, vision, and decisions to fit your case.</p>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2>Full State Export / Import</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <button onclick="exportState()">⤓ Download state .json</button>
+        <button onclick="copyState()">📋 Copy state JSON</button>
+        <button onclick="resetAll()">🗑 Reset all</button>
+      </div>
+      <pre class="export" id="state-pre"></pre>
+      <details>
+        <summary>Import previous state</summary>
+        <p style="color:var(--muted);font-size:13px">Paste state JSON, click Import. Overwrites current state.</p>
+        <textarea id="import-area" style="width:100%;min-height:160px;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:10px;font:12px ui-monospace,monospace"></textarea>
+        <button onclick="importState()" style="margin-top:8px">Import</button>
+      </details>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2>How AI Context Stays Small</h2>
+      <p style="color:var(--muted)">The JSON-LD block at the top of this file is the single source of truth. The HTML/CSS/JS just renders it. When you ask an AI assistant a question about this design, paste only the JSON-LD block (or the markdown summary) — not the whole HTML — and you save 70%+ of context tokens.</p>
+      <p style="color:var(--muted)">Round trip: AI proposes changes to the schema (JSON delta) → you paste back into the <code>&lt;script id="design-schema"&gt;</code> block → reload → UI reflects new schema.</p>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast">Copied</div>
+
+<script>
+/* ===== CONSTANTS pulled from JSON-LD ====================================== */
+const SCHEMA = JSON.parse(document.getElementById('design-schema').textContent);
+let DECISIONS    = SCHEMA.decisions;
+let STACK_LAYERS = SCHEMA.stackLayers;
+let TUNABLES     = SCHEMA.tunables;
+let PROJECT      = SCHEMA.project;
+
+document.getElementById('hdr-title').textContent  = `${PROJECT.name} — Design Decisions`;
+document.title                                    = `${PROJECT.name} — Design Decisions`;
+document.getElementById('vision-headline').textContent = PROJECT.purpose.split('.')[0] + '.';
+document.getElementById('vision-body').textContent     = PROJECT.purpose;
+document.getElementById('success-list').innerHTML      = PROJECT.successCriteria.map(s => `<li>${escapeHtml(s)}</li>`).join('');
+
+/* ===== STATE ============================================================== */
+const STATE_KEY = `odl-design-doc-${PROJECT.name.replace(/\W+/g,'-').toLowerCase()}-v1`;
+const defaultState = () => ({
+  decisions: Object.fromEntries(DECISIONS.map(d => [d.id, { status: '', note: '' }])),
+  stack:     Object.fromEntries(STACK_LAYERS.map(l => [l.id, ''])),
+  tunables:  Object.fromEntries(TUNABLES.map(t => [t.id, t.default])),
+  todos:     [],
+  plan:      [],
+  log:       [],
+  theme:     'dark',
+  user:      'AAO-Surface7',
+});
+let state = load();
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STATE_KEY);
+    if (!raw) return defaultState();
+    const s = JSON.parse(raw);
+    const d = defaultState();
+    return { ...d, ...s,
+      decisions: { ...d.decisions, ...(s.decisions||{}) },
+      stack:     { ...d.stack,     ...(s.stack||{}) },
+      tunables:  { ...d.tunables,  ...(s.tunables||{}) }
+    };
+  } catch (e) { return defaultState(); }
+}
+function save() {
+  localStorage.setItem(STATE_KEY, JSON.stringify(state));
+  refreshKPIs();
+  refreshStatePre();
+}
+function logAction(item, action) {
+  state.log.unshift({ when: new Date().toISOString(), item, action, by: state.user });
+  state.log = state.log.slice(0, 100);
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1400);
+}
+
+/* ===== TABS =============================================================== */
+document.querySelectorAll('nav.tabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b === btn));
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('active', s.id === 'tab-' + tab));
+    if (tab === 'log')    renderLog();
+    if (tab === 'reuse')  refreshStatePre();
+    if (tab === 'editor' && !document.getElementById('schema-editor').value) loadEditorFromSchema();
+  });
+});
+
+/* ===== DECISIONS ========================================================== */
+function renderDecisions() {
+  const wrap = document.getElementById('decisions-list');
+  wrap.innerHTML = '';
+  DECISIONS.forEach(d => {
+    const s = state.decisions[d.id];
+    const el = document.createElement('div');
+    el.className = 'decision';
+    el.innerHTML = `
+      <div class="row">
+        <span class="title">${escapeHtml(d.title)}</span>
+        <span class="meta">refs: ${escapeHtml(d.refs)}</span>
+        <span class="seg">
+          ${['approve','hold','deny'].map(v => `
+            <input type="radio" name="dec-${d.id}" value="${v}" id="dec-${d.id}-${v}" ${s.status===v?'checked':''} />
+            <label for="dec-${d.id}-${v}">${v}</label>
+          `).join('')}
+        </span>
+      </div>
+      <div class="body">${escapeHtml(d.body)}</div>
+      <textarea placeholder="Rationale / dissent / open questions">${escapeHtml(s.note||'')}</textarea>
+    `;
+    el.querySelectorAll(`input[name="dec-${d.id}"]`).forEach(r => {
+      r.addEventListener('change', () => {
+        state.decisions[d.id].status = r.value;
+        logAction(d.title, r.value);
+        save();
+      });
+    });
+    const ta = el.querySelector('textarea');
+    ta.addEventListener('input', e => { state.decisions[d.id].note = e.target.value; });
+    ta.addEventListener('blur',  save);
+    wrap.appendChild(el);
+  });
+}
+
+/* ===== STACK MATRIX ======================================================= */
+function renderStack() {
+  const t = document.getElementById('stack-matrix');
+  const maxOpts = Math.max(...STACK_LAYERS.map(l => l.options.length));
+  t.innerHTML = `
+    <thead><tr><th>Layer</th>${Array.from({length:maxOpts}).map((_,i)=>`<th>Option ${i+1}</th>`).join('')}</tr></thead>
+    <tbody>
+      ${STACK_LAYERS.map(l => `
+        <tr>
+          <td class="layer">${escapeHtml(l.label)}</td>
+          ${l.options.map(opt => `
+            <td><label>
+              <input type="radio" name="stack-${l.id}" value="${escapeHtml(opt)}" ${state.stack[l.id]===opt?'checked':''} />
+              <span>${escapeHtml(opt)}</span>
+            </label></td>
+          `).join('')}
+          ${Array.from({length:maxOpts-l.options.length}).map(()=>'<td></td>').join('')}
+        </tr>
+      `).join('')}
+    </tbody>
+  `;
+  t.querySelectorAll('input[type=radio]').forEach(r => {
+    r.addEventListener('change', () => {
+      const layerId = r.name.replace('stack-','');
+      state.stack[layerId] = r.value;
+      logAction(`Stack: ${layerId}`, `set → ${r.value}`);
+      save();
+    });
+  });
+}
+
+/* ===== TUNABLES =========================================================== */
+function renderTunables() {
+  const wrap = document.getElementById('tunables-list');
+  wrap.innerHTML = '';
+  TUNABLES.forEach(t => {
+    const v = state.tunables[t.id];
+    const row = document.createElement('div');
+    row.className = 'tunable';
+    row.innerHTML = `
+      <div><div class="label">${escapeHtml(t.label)}</div><div class="desc">${escapeHtml(t.desc)}</div></div>
+      <input type="range" min="${t.min}" max="${t.max}" step="${t.step}" value="${v}" id="tun-${t.id}" />
+      <div class="val" id="tun-${t.id}-val">${formatVal(t, v)}</div>
+    `;
+    wrap.appendChild(row);
+    const inp = row.querySelector('input[type=range]');
+    const out = row.querySelector('.val');
+    inp.addEventListener('input',  () => { out.textContent = formatVal(t, inp.value); });
+    inp.addEventListener('change', () => {
+      state.tunables[t.id] = parseFloat(inp.value);
+      logAction(`Tunable: ${t.id}`, `set → ${inp.value}`);
+      save();
+    });
+  });
+}
+function formatVal(t, v) { v = parseFloat(v); return t.step < 1 ? v.toFixed(2) : Math.round(v).toString(); }
+
+/* ===== TO-DO + PLAN ======================================================= */
+function addTodo() {
+  const title = document.getElementById('todo-title').value.trim();
+  const scope = document.getElementById('todo-scope').value;
+  if (!title) return;
+  state.todos.push({ id: 't' + Date.now(), title, scope, ts: new Date().toISOString(), status: 'pending' });
+  logAction(`To-do: ${title}`, 'added');
+  document.getElementById('todo-title').value = '';
+  save(); renderTodos();
+}
+function approveTodo(id) {
+  const i = state.todos.findIndex(t => t.id === id); if (i < 0) return;
+  const it = state.todos.splice(i, 1)[0];
+  it.status = 'approved'; it.approvedAt = new Date().toISOString();
+  state.plan.push(it);
+  logAction(`To-do: ${it.title}`, 'approved → project plan');
+  save(); renderTodos();
+}
+function denyTodo(id) {
+  const t = state.todos.find(x => x.id === id); if (!t) return;
+  t.status = 'denied';
+  logAction(`To-do: ${t.title}`, 'denied');
+  save(); renderTodos();
+}
+function delTodo(id) {
+  state.todos = state.todos.filter(t => t.id !== id);
+  state.plan  = state.plan.filter(t => t.id !== id);
+  save(); renderTodos();
+}
+function renderTodos() {
+  const list = document.getElementById('todo-list'); list.innerHTML = '';
+  state.todos.forEach(t => {
+    const el = document.createElement('div');
+    el.className = 'todo-item ' + (t.status==='denied'?'denied':'');
+    el.innerHTML = `
+      <div class="grow"><b>${escapeHtml(t.title)}</b><div class="meta">${t.scope} · ${new Date(t.ts).toLocaleString()}</div></div>
+      <button class="approve" onclick="approveTodo('${t.id}')">✓</button>
+      <button class="deny"    onclick="denyTodo('${t.id}')">✕</button>
+      <button class="del"     onclick="delTodo('${t.id}')">🗑</button>
+    `;
+    list.appendChild(el);
+  });
+  const plan = document.getElementById('plan-list'); plan.innerHTML = '';
+  state.plan.forEach(t => {
+    const el = document.createElement('div');
+    el.className = 'todo-item approved';
+    el.innerHTML = `
+      <div class="grow"><b>${escapeHtml(t.title)}</b><div class="meta">${t.scope} · approved ${new Date(t.approvedAt).toLocaleString()}</div></div>
+      <button class="del" onclick="delTodo('${t.id}')">🗑</button>
+    `;
+    plan.appendChild(el);
+  });
+}
+
+/* ===== LOG ================================================================ */
+function renderLog() {
+  const list = document.getElementById('log-list'); list.innerHTML = '';
+  state.log.forEach(e => {
+    const el = document.createElement('div');
+    el.className = 'log-row';
+    el.innerHTML = `
+      <div class="when">${new Date(e.when).toLocaleString()}</div>
+      <div>${escapeHtml(e.item)}</div>
+      <div>${escapeHtml(e.action)}</div>
+      <div>${escapeHtml(e.by||'')}</div>
+    `;
+    list.appendChild(el);
+  });
+}
+
+/* ===== KPIs =============================================================== */
+function refreshKPIs() {
+  document.getElementById('kpi-approved').textContent = Object.values(state.decisions).filter(d => d.status==='approve').length;
+  document.getElementById('kpi-pending').textContent  = Object.values(state.decisions).filter(d => !d.status || d.status==='hold').length;
+  document.getElementById('kpi-todo').textContent     = state.todos.filter(t => t.status==='pending').length;
+  document.getElementById('kpi-plan').textContent     = state.plan.length;
+}
+
+/* ===== AI CONTEXT (markdown + JSON) ======================================= */
+function buildJSONContext() {
+  return JSON.stringify({ schema: SCHEMA, state }, null, 2);
+}
+function buildMarkdownContext() {
+  const status = id => ({approve:'✅',deny:'❌',hold:'⏸','':'·'})[state.decisions[id]?.status||''];
+  const stackPicks = STACK_LAYERS.map(l => `- ${l.label}: **${state.stack[l.id]||'(unset)'}**`).join('\n');
+  const decs = DECISIONS.map(d => {
+    const s = state.decisions[d.id] || {};
+    const note = s.note ? ` — _${s.note.replace(/\n/g,' ')}_` : '';
+    return `${status(d.id)} **${d.title}** (${d.refs})${note}`;
+  }).join('\n');
+  const tuns = TUNABLES.map(t => `- ${t.label}: **${formatVal(t, state.tunables[t.id])}** (default ${formatVal(t, t.default)})`).join('\n');
+  const todo = state.todos.filter(t => t.status==='pending').map(t => `- [ ] ${t.title} (${t.scope})`).join('\n') || '_none_';
+  const plan = state.plan.map(t => `- [x] ${t.title} (${t.scope})`).join('\n') || '_none_';
+  return `# ${PROJECT.name} — Design Spec Context
+
+**Purpose**: ${PROJECT.purpose}
+
+**Success criteria**:
+${PROJECT.successCriteria.map(s => `- ${s}`).join('\n')}
+
+## Macro Decisions
+${decs}
+
+## Stack Picks
+${stackPicks}
+
+## Tunables
+${tuns}
+
+## To-do (pending)
+${todo}
+
+## Project Plan (approved)
+${plan}
+
+## Monday board refs
+- Primary board: ${SCHEMA.monday.primaryBoard} (${SCHEMA.monday.boardName})
+- Groups: development=${SCHEMA.monday.groups.development}, userWorkflow=${SCHEMA.monday.groups.userWorkflow}, architecture=${SCHEMA.monday.groups.architecture}
+
+_Generated ${new Date().toISOString()} · last schema update ${SCHEMA.lastUpdated}_`;
+}
+function copyAIContext(fmt) {
+  const text = fmt === 'markdown' ? buildMarkdownContext() : buildJSONContext();
+  navigator.clipboard.writeText(text).then(() => toast(`Copied ${fmt} context`));
+}
+
+/* ===== STATE EXPORT / IMPORT ============================================== */
+function refreshStatePre() {
+  const pre = document.getElementById('state-pre');
+  if (pre) pre.textContent = JSON.stringify(state, null, 2);
+}
+function copyState() { navigator.clipboard.writeText(JSON.stringify(state, null, 2)).then(() => toast('State copied')); }
+function exportState() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `${PROJECT.name.replace(/\W+/g,'-').toLowerCase()}-state-${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(url);
+}
+function importState() {
+  try {
+    const obj = JSON.parse(document.getElementById('import-area').value);
+    state = { ...defaultState(), ...obj };
+    save(); renderAll();
+    toast('Imported');
+  } catch (e) { alert('Invalid JSON: ' + e.message); }
+}
+function resetAll() {
+  if (!confirm('Wipe all decisions, tunables, todos, plan, log? This cannot be undone.')) return;
+  localStorage.removeItem(STATE_KEY);
+  state = defaultState();
+  renderAll();
+  toast('Reset');
+}
+function toggleTheme() {
+  state.theme = state.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = state.theme;
+  save();
+}
+
+/* ===== SCHEMA EDITOR ====================================================== */
+// SCHEMA is declared with const; reassign via mutable proxy to allow live edits.
+let LIVE_SCHEMA = SCHEMA;
+function loadEditorFromSchema() {
+  document.getElementById('schema-editor').value = JSON.stringify(LIVE_SCHEMA, null, 2);
+  setEditorStatus('Loaded current schema. Edit + Validate + Apply.', 'ok');
+}
+function validateEditor() {
+  try {
+    const obj = JSON.parse(document.getElementById('schema-editor').value);
+    const required = ['project', 'decisions', 'stackLayers', 'tunables'];
+    const missing = required.filter(k => !obj[k]);
+    if (missing.length) { setEditorStatus(`Missing required keys: ${missing.join(', ')}`, 'bad'); return null; }
+    if (!Array.isArray(obj.decisions))    { setEditorStatus('decisions must be an array', 'bad'); return null; }
+    if (!Array.isArray(obj.stackLayers))  { setEditorStatus('stackLayers must be an array', 'bad'); return null; }
+    if (!Array.isArray(obj.tunables))     { setEditorStatus('tunables must be an array', 'bad'); return null; }
+    setEditorStatus(`✓ Valid. ${obj.decisions.length} decisions · ${obj.stackLayers.length} stack layers · ${obj.tunables.length} tunables.`, 'ok');
+    return obj;
+  } catch (e) { setEditorStatus(`Parse error: ${e.message}`, 'bad'); return null; }
+}
+function applyEditor() {
+  const obj = validateEditor();
+  if (!obj) return;
+  LIVE_SCHEMA = obj;
+  // Rebuild module-level refs by reassigning constants is impossible, so swap the global view of the data
+  // via window-level pointers used by render functions.
+  rebindSchema(obj);
+  // Heal state against new schema shape (preserve overlapping keys, default new ones)
+  state.decisions = { ...Object.fromEntries(obj.decisions.map(d => [d.id, { status:'', note:'' }])), ...state.decisions };
+  state.stack     = { ...Object.fromEntries(obj.stackLayers.map(l => [l.id, ''])),                    ...state.stack };
+  state.tunables  = { ...Object.fromEntries(obj.tunables.map(t => [t.id, t.default])),                ...state.tunables };
+  save();
+  renderAll();
+  // Update header + vision from new schema
+  document.getElementById('hdr-title').textContent       = `${obj.project.name} — Design Decisions`;
+  document.title                                         = `${obj.project.name} — Design Decisions`;
+  document.getElementById('vision-headline').textContent = (obj.project.purpose||'').split('.')[0] + '.';
+  document.getElementById('vision-body').textContent     = obj.project.purpose || '';
+  document.getElementById('success-list').innerHTML      = (obj.project.successCriteria||[]).map(s => `<li>${escapeHtml(s)}</li>`).join('');
+  setEditorStatus('Applied. UI re-rendered. Save As HTML to persist outside this browser.', 'ok');
+}
+// Rebind module-scope references (declared with `let` so reassignment propagates to render fns)
+function rebindSchema(obj) {
+  DECISIONS    = obj.decisions;
+  STACK_LAYERS = obj.stackLayers;
+  TUNABLES     = obj.tunables;
+  PROJECT      = obj.project;
+}
+function saveAsHTML() {
+  const obj = validateEditor();
+  if (!obj) { alert('Fix validation errors first.'); return; }
+  // Build a new HTML document by replacing the JSON-LD block in this document's HTML
+  const currentHTML = document.documentElement.outerHTML;
+  const newSchemaJSON = JSON.stringify(obj, null, 2);
+  const newHTML = currentHTML.replace(
+    /(<script type="application\/ld\+json" id="design-schema">)[\s\S]*?(<\/script>)/,
+    `$1\n${newSchemaJSON}\n$2`
+  );
+  // Reset localStorage key inside the saved file so the new doc starts fresh
+  const slug = (obj.project.name || 'project').replace(/\W+/g,'-').toLowerCase();
+  const finalHTML = newHTML.replace(/odl-design-doc-[a-z0-9-]+-v1/g, `design-doc-${slug}-v1`);
+  const blob = new Blob(['<!doctype html>\n' + finalHTML], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `design-doc-${slug}.html`;
+  a.click(); URL.revokeObjectURL(url);
+  toast(`Saved as design-doc-${slug}.html`);
+}
+function setEditorStatus(msg, kind) {
+  const el = document.getElementById('editor-status');
+  const color = kind === 'ok' ? 'var(--ok)' : kind === 'bad' ? 'var(--bad)' : 'var(--muted)';
+  el.innerHTML = `<span style="color:${color}">${escapeHtml(msg)}</span>`;
+}
+
+/* ===== TEMPLATE DOWNLOAD ================================================== */
+function downloadTemplate() {
+  // Clone this very HTML, strip state, leave schema as example with placeholders highlighted.
+  const html = document.documentElement.outerHTML;
+  // Replace localStorage key to a generic one so a new project starts blank
+  const stripped = html
+    .replace(/odl-design-doc-[a-z0-9-]+-v1/g, 'design-doc-PROJECT-NAME-v1')
+    .replace(/<title>[^<]+<\/title>/, '<title>Design Decisions — TEMPLATE</title>');
+  const blob = new Blob(['<!doctype html>\n' + stripped], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'design-doc-template.html';
+  a.click(); URL.revokeObjectURL(url);
+  toast('Template downloaded — edit the JSON-LD block at top');
+}
+
+/* ===== UTIL =============================================================== */
+function escapeHtml(s) { return (s||'').toString().replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ===== INIT =============================================================== */
+function renderAll() {
+  document.documentElement.dataset.theme = state.theme;
+  renderDecisions();
+  renderStack();
+  renderTunables();
+  renderTodos();
+  refreshKPIs();
+  refreshStatePre();
+}
+renderAll();
+</script>
+</body>
+</html>
