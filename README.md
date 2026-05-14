@@ -43,14 +43,14 @@ flowchart LR
 ```
 
 ```bash
-# 1. Open the HTML (no install — just double-click)
+# 1. Open and edit the HTML file
 open design-doc.html       # macOS
 start design-doc.html      # Windows
 xdg-open design-doc.html   # Linux
 ```
 
 1. **Tweak** any tab: drag a slider, click approve, pick a stack option.
-2. Click **📋 AI ctx (md)** in the header — copies a ~1,500-token summary to clipboard.
+2. Click **📋 AI ctx (md)** in the header: copies a ~1,500-token summary to clipboard.
 3. Paste into your AI chat, then ask your question. Done.
 
 > [!NOTE]
@@ -75,7 +75,7 @@ No SDK. No config file. No deploy. Just a contract the AI reads on demand.
 
 ## 🎛 The Three Layers of Control
 
-### Layer A — Tunables → numeric knobs
+### Layer A : Tunables → numeric knobs
 
 Drag a slider in the **Tunables** tab. AI obeys the new value next time you paste context.
 
@@ -94,7 +94,7 @@ Drag a slider in the **Tunables** tab. AI obeys the new value next time you past
 
 ---
 
-### Layer B — Macro Decisions → binary constraints
+### Layer B : Macro Decisions → binary constraints
 
 Open the **Macro Decisions** tab. Each is a hard rule.
 
@@ -122,7 +122,7 @@ Open the **Macro Decisions** tab. Each is a hard rule.
 
 ---
 
-### Layer C — Stack Matrix → which language AI codes in
+### Layer C : Stack Matrix → which language AI codes in
 
 Open the **Stack Matrix** tab. One pick per layer.
 
@@ -136,7 +136,7 @@ Open the **Stack Matrix** tab. One pick per layer.
 | Chatbot frontend | Open WebUI · LibreChat · Semantic Kernel + Blazor · Claude Desktop |
 
 > [!TIP]
-> **Real example:** Tech lead picks `C#/.NET` for MCP + Memory + Regression. Asks AI "build me the OdataLink MCP server" — AI returns C# code, not TypeScript. No guessing.
+> **Real example:** Tech lead picks `C#/.NET` for MCP + Memory + Regression. Asks AI "build me the OdataLink MCP server" —> AI returns C# code, not hallucinations. No guessing.
 
 ---
 
@@ -229,7 +229,7 @@ Add to the `"tunables"` array → **Apply** → new slider appears.
 ## 📝 Sample Prompt Templates
 
 <details>
-<summary><b>Template 1 — Generate a report</b></summary>
+<summary><b>Template 1: Generate a report</b></summary>
 
 ````markdown
 [paste AI ctx]
@@ -241,7 +241,7 @@ Run the validator before showing me. If it fails, show me the diff and the sugge
 </details>
 
 <details>
-<summary><b>Template 2 — Propose a stack change</b></summary>
+<summary><b>Template 2: Propose a stack change</b></summary>
 
 ````markdown
 [paste AI ctx]
@@ -253,7 +253,7 @@ I'm considering switching the DB Adapter stack from psycopg to EF Core.
 </details>
 
 <details>
-<summary><b>Template 3 — Sanity check the spec</b></summary>
+<summary><b>Template 3: Sanity check the spec</b></summary>
 
 ````markdown
 [paste AI ctx]
@@ -265,7 +265,7 @@ I'm considering switching the DB Adapter stack from psycopg to EF Core.
 </details>
 
 <details>
-<summary><b>Template 4 — Onboard a new team member</b></summary>
+<summary><b>Template 4: Onboard a new team member</b></summary>
 
 ````markdown
 [paste AI ctx + this README]
@@ -277,7 +277,7 @@ One page. Plain English. Focus on what they can change vs what's locked.
 
 ---
 
-## ⚖️ Before / After — Same Prompt, Different Behavior
+## ⚖️ Before / After - Same Prompt, Different Behavior
 
 | | **Before** (no spec) | **After** (spec attached) |
 |---|---|---|
@@ -298,9 +298,9 @@ Same prompt → wildly different output.
 
 | What you paste | ~Tokens | When to use |
 |---|---|---|
-| Full `design-doc.html` | 10,000 | **Never** — wastes context |
+| Full `design-doc.html` | 10,000 | **Never** waste context |
 | JSON-LD ctx (📋 AI ctx (json)) | 2,000 | Tool-using agents, structured prompts |
-| **Markdown ctx (📋 AI ctx (md))** | **1,500** | **Daily chat work — best ROI** |
+| **Markdown ctx (📋 AI ctx (md))** | **1,500** | **Daily chat work** |
 | This README only | 2,000 | Onboarding humans or AI to the system |
 | README + Markdown ctx | 3,500 | First-time use, deep / unfamiliar tasks |
 
@@ -314,8 +314,8 @@ Same prompt → wildly different output.
 | Symptom | Cause | Fix |
 |---|---|---|
 | AI ignores my settings | Forgot to re-copy ctx after editing | Click **📋 AI ctx (md)** again, paste in a fresh message |
-| Old behavior after slider change | Context isn't live; chat only sees what was pasted | Paste new ctx: *"Updated spec — refer to this from now on"* |
-| Schema Editor "invalid JSON" | Missing comma / unmatched bracket | Lint with [jsonlint.com](https://jsonlint.com) — finds the exact line |
+| Old behavior after slider change | Context isn't live; chat only sees what was pasted | Paste new ctx: *"Updated spec - refer to this from now on"* |
+| Schema Editor "invalid JSON" | Missing comma / unmatched bracket | Lint with [jsonlint.com](https://jsonlint.com) - finds the exact line |
 | Forked doc still has old project name | localStorage changed; HTML not regenerated | Click **💾 Save As HTML** to bake the schema into the file |
 | Teammates don't see my decisions | localStorage is per-browser, per-device | Export state JSON → share file, OR Save As HTML → share file |
 
@@ -378,7 +378,7 @@ Yes, indirectly. Three reasons:
 <details>
 <summary><b>Works with Claude / ChatGPT / Gemini equally?</b></summary>
 
-Yes. Markdown context is plain text — works in any chat. JSON-LD ctx is even better for tool-using agents (Claude Desktop, Cursor, Codex MCP, etc.).
+Yes. Markdown context is plain text (.md). works in any chat. JSON-LD ctx is even better for tool-using agents (Claude Desktop, Cursor, Codex MCP, etc.).
 </details>
 
 <details>
@@ -427,7 +427,7 @@ Yes. No CDN dependencies, no API calls, no telemetry. Pure HTML + vanilla JS. Op
 - **Offline.** Works on air-gapped machines.
 - **Stable.** No supply-chain risk, no CDN outages, no version drift.
 - **Auditable.** ~520 lines of vanilla JS, readable by any engineer.
-- **Trade-off:** ~150 lines of custom CSS you'd save with Pico.css. Opt-in line is commented in the HTML head — uncomment if you want it.
+- **Trade-off:** ~150 lines of custom CSS you'd save with Pico.css. Opt-in line is commented in the HTML head. Uncomment if you want it.
 
 </details>
 
@@ -446,7 +446,7 @@ Same source data, three projections. No duplication.
 
 ## 📜 License
 
-MIT — fork, modify, ship.
+MIT
 
 ---
 
