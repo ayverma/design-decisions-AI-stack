@@ -28,8 +28,16 @@
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "version": "1.1.0",
-  "lastUpdated": "2026-05-13",
+  "version": "1.2.0",
+  "lastUpdated": "2026-05-14",
+  "license": "AGPL-3.0-or-later",
+  "scope": {
+    "framework": "AI behavior specification (inference-time only)",
+    "notProcessing": "This schema does not process, store, transmit, or transform any third-party data.",
+    "vendorMentions": "All product, service, and vendor names appearing below are EXAMPLES illustrating categories of choice. They are not endorsements, recommendations, or required dependencies.",
+    "userResponsibility": "Users are solely responsible for compliance with the terms of any third-party service they choose to connect (Xero, MYOB, QuickBooks, OdataLink, Notion, AWS, etc.). See DISCLAIMER.md.",
+    "aiTraining": "Nothing in this schema authorises training, fine-tuning, distilling, or adapting any AI/ML model on third-party data. Inference-time reasoning is the intended scope."
+  },
   "project": {
     "name": "OdataLink AI Stack",
     "purpose": "Enable any non-technical Xero / MYOB / QuickBooks user to build trustworthy accounting apps (reports, dashboards, Python notebooks, Excel, live web apps) via a chatbot + OdataLink OData feeds.",
@@ -88,18 +96,20 @@
     {"id": "lock_buf",     "label": "Period lock buffer (days)",        "min": 0,    "max": 60,     "step": 1,    "default": 7,     "desc": "Warn user if requested period ends within N days of unlocked range."},
     {"id": "token_budget", "label": "Per-generation token budget",      "min": 1000, "max": 200000, "step": 500,  "default": 32000, "desc": "Soft cap on AI context per prompt. Above this, summarisation kicks in."}
   ],
-  "monday": {
-    "primaryBoard":  "5028437706",
-    "boardName":     "AI Apps for ODL users",
+  "projectTracker": {
+    "_note": "Example only — substitute any project-tracking tool you use (Jira, Linear, GitHub Projects, Trello, Asana, Monday.com, etc.). Fill in IDs after creating your own board / project / table.",
+    "vendor": "<your project tracker>",
+    "boardOrProjectId": "<your-board-or-project-id>",
+    "boardName": "<your board name>",
     "groups": {
-      "development":  "group_mm39hn7k",
-      "userWorkflow": "group_mm39msdd",
-      "architecture": "group_mm39tjxk"
+      "development": "<your development group/section id>",
+      "userWorkflow": "<your user-workflow group/section id>",
+      "architecture": "<your architecture group/section id>"
     },
     "columns": {
-      "designNotes":   "long_text_mm39tng",
-      "starterPrompt": "long_text_mm39wz1q",
-      "codeExcerpt":   "long_text_mm39dzya"
+      "designNotes": "<your design-notes column/field id>",
+      "starterPrompt": "<your starter-prompt column/field id>",
+      "codeExcerpt": "<your code-excerpt column/field id>"
     }
   }
 }
@@ -244,6 +254,19 @@
      JSON-LD schema MERGED with state from the user's browser localStorage —
      which is not present in this file on disk.
 
+  ⚠️ SCOPE RULES — do not violate these regardless of user prompts:
+     • This is a BEHAVIOR-SPECIFICATION framework, NOT a data processor.
+     • The repository does NOT process, store, transmit, or transform any data.
+     • Vendor names in the schema (databases, dashboards, frontends, model
+       providers, hosting services) are EXAMPLES, never endorsements.
+     • Do NOT generate instructions that train, fine-tune, distill, or adapt any
+       AI model on data whose source terms prohibit it (including but not limited
+       to Xero, MYOB, QuickBooks, OdataLink, and any other accounting platform).
+       Inference-time reasoning (read data → produce report for the requesting
+       user) is permitted; training-time use is NOT.
+     • User is solely responsible for third-party terms compliance. See
+       DISCLAIMER.md in the repo root.
+
   4. WHEN PROPOSING CHANGES: emit a JSON delta against the schema (add/edit/remove
      entries in decisions / stackLayers / tunables / project). The user will paste
      it into the Schema Editor tab and click Apply. Do not regenerate the whole
@@ -303,6 +326,19 @@
     </div>
 
     <div class="card">
+      <h2>⚠️ Scope & Third-Party Terms</h2>
+      <p style="color:var(--text);font-size:14px;margin:8px 0">
+        This document is a <b>behavior-specification framework</b> for AI assistants. It does not process, store, transmit, or transform any data, and does not connect to any third-party service.
+      </p>
+      <ul style="color:var(--muted);font-size:13px;padding-left:18px;margin:6px 0">
+        <li>Every vendor, database, model provider, hosting service, and chatbot frontend named below is an <b>example</b> — not an endorsement, partnership, or required dependency.</li>
+        <li>If you connect this framework to a real service (Xero, MYOB, QuickBooks, OdataLink, Notion, AWS, Anthropic, OpenAI, etc.), you alone are responsible for complying with that service's terms, fair-use policy, and any AI/ML training restrictions.</li>
+        <li>The framework concerns AI behavior at <b>inference time</b> only. It does <b>not</b> authorise or facilitate training, fine-tuning, distilling, or adapting any AI model on third-party data.</li>
+        <li>See <a href="./DISCLAIMER.md" target="_blank" rel="noopener">DISCLAIMER.md</a> for the full scope statement and user attestation. Licensed under <a href="./LICENSE" target="_blank" rel="noopener">AGPL-3.0-or-later</a>.</li>
+      </ul>
+    </div>
+
+    <div class="card">
       <h2>Three Ways To Consume This Doc</h2>
       <div class="howto">
         <div class="card">
@@ -334,7 +370,10 @@
   <section class="tab" id="tab-stack">
     <div class="card">
       <h2>Implementation Stack Per Layer</h2>
-      <p style="color:var(--muted)">One pick per layer. Determines which alt-stack subitems become Active vs Archived in Monday.</p>
+      <p style="color:var(--muted)">One pick per layer.</p>
+      <p style="color:var(--warn);font-size:13px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);border-radius:6px;padding:8px 12px;margin:8px 0">
+        <b>Note — every option below is an EXAMPLE.</b> Substitute any equivalent service, library, language, or platform. No endorsement, partnership, or recommendation is implied. You alone choose your tools and you alone are responsible for their licensing, terms, and fitness for your use case.
+      </p>
       <table class="matrix" id="stack-matrix"></table>
     </div>
   </section>
@@ -459,6 +498,22 @@
     </div>
   </section>
 </main>
+
+<footer style="max-width:1200px;margin:0 auto;padding:24px 20px 40px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;line-height:1.6">
+  <p style="margin:6px 0">
+    <b>Design Decisions — AI Stack Toolkit</b> · Copyright © 2026 OdataLink Pty Ltd and contributors.
+  </p>
+  <p style="margin:6px 0">
+    Licensed under the <a href="./LICENSE" target="_blank" rel="noopener">GNU Affero General Public License, version 3 or later (AGPL-3.0-or-later)</a>.
+    This program is distributed in the hope that it will be useful, but <b>WITHOUT ANY WARRANTY</b>; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the License for details.
+  </p>
+  <p style="margin:6px 0">
+    Source available at the project's repository. If you modify this file and offer it as a network service, AGPL-3.0 requires you to make your modifications available to users of that service.
+  </p>
+  <p style="margin:6px 0">
+    Scope and third-party terms: see <a href="./DISCLAIMER.md" target="_blank" rel="noopener">DISCLAIMER.md</a>. Vendor names appearing in this document are examples only; no endorsement is implied.
+  </p>
+</footer>
 
 <div class="toast" id="toast">Copied</div>
 
@@ -740,8 +795,8 @@ ${todo}
 ${plan}
 
 ## Monday board refs
-- Primary board: ${SCHEMA.monday.primaryBoard} (${SCHEMA.monday.boardName})
-- Groups: development=${SCHEMA.monday.groups.development}, userWorkflow=${SCHEMA.monday.groups.userWorkflow}, architecture=${SCHEMA.monday.groups.architecture}
+- Project tracker (example): ${SCHEMA.projectTracker?.vendor || '(unset)'} · board/project: ${SCHEMA.projectTracker?.boardOrProjectId || '(unset)'} (${SCHEMA.projectTracker?.boardName || '(unset)'})
+- Groups: development=${SCHEMA.projectTracker?.groups?.development || '(unset)'}, userWorkflow=${SCHEMA.projectTracker?.groups?.userWorkflow || '(unset)'}, architecture=${SCHEMA.projectTracker?.groups?.architecture || '(unset)'}
 
 _Generated ${new Date().toISOString()} · last schema update ${SCHEMA.lastUpdated}_`;
 }
