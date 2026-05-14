@@ -1,16 +1,17 @@
 <div align="center">
 
-# 🧭 AI Behavior Spec — Design Doc Toolkit for OdataLink
+# 🧭 AI Behavior Spec — Design Doc Toolkit
 
 **A single HTML file + this README = the only "config" your AI assistant needs.**
 
 Non-technical users tweak sliders and toggles → AI follows the new rules → no code, no SDKs, no engineering ticket.
 
-![version](https://img.shields.io/badge/version-1.1.0-7aa2ff)
+![version](https://img.shields.io/badge/version-1.2.0-7aa2ff)
 ![status](https://img.shields.io/badge/status-active-4ade80)
 ![tokens-md](https://img.shields.io/badge/AI%20ctx%20(md)-~1.5K%20tokens-fbbf24)
 ![tokens-json](https://img.shields.io/badge/AI%20ctx%20(json)-~2K%20tokens-fbbf24)
-![license](https://img.shields.io/badge/license-MIT-blue)
+![license](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)
+![scope](https://img.shields.io/badge/scope-inference%20only-orange)
 ![lastupdated](https://img.shields.io/badge/updated-2026--05--14-lightgrey)
 
 [**Quick Start**](#-quick-start) · [**The Three Controls**](#-the-three-layers-of-control) · [**Daily Loop**](#-the-daily-loop) · [**Edit Recipes**](#-edit-recipes-no-code-needed) · [**FAQ**](#-faq)
@@ -25,6 +26,8 @@ Non-technical users tweak sliders and toggles → AI follows the new rules → n
 |---|---|
 | [`design-doc.html`](./design-doc.html) | Interactive specification. Open in any browser. Sliders, decisions, stack picks. |
 | [`design-doc-readme.md`](./design-doc-readme.md) | This file. Explains how the HTML controls AI behavior. |
+| [`DISCLAIMER.md`](./DISCLAIMER.md) | Scope, third-party terms, user attestation. **Read before connecting any real data.** |
+| [`LICENSE`](./LICENSE) | GNU Affero General Public License, version 3 or later. |
 | _(your edits)_ | Live in browser `localStorage`. Export via the **⤓ Export** button to share. |
 
 > [!TIP]
@@ -43,14 +46,14 @@ flowchart LR
 ```
 
 ```bash
-# 1. Open and edit the HTML file
+# 1. Open the HTML (no install — just double-click)
 open design-doc.html       # macOS
 start design-doc.html      # Windows
 xdg-open design-doc.html   # Linux
 ```
 
 1. **Tweak** any tab: drag a slider, click approve, pick a stack option.
-2. Click **📋 AI ctx (md)** in the header: copies a ~1,500-token summary to clipboard.
+2. Click **📋 AI ctx (md)** in the header — copies a ~1,500-token summary to clipboard.
 3. Paste into your AI chat, then ask your question. Done.
 
 > [!NOTE]
@@ -75,7 +78,7 @@ No SDK. No config file. No deploy. Just a contract the AI reads on demand.
 
 ## 🎛 The Three Layers of Control
 
-### Layer A : Tunables → numeric knobs
+### Layer A — Tunables → numeric knobs
 
 Drag a slider in the **Tunables** tab. AI obeys the new value next time you paste context.
 
@@ -94,7 +97,7 @@ Drag a slider in the **Tunables** tab. AI obeys the new value next time you past
 
 ---
 
-### Layer B : Macro Decisions → binary constraints
+### Layer B — Macro Decisions → binary constraints
 
 Open the **Macro Decisions** tab. Each is a hard rule.
 
@@ -122,7 +125,7 @@ Open the **Macro Decisions** tab. Each is a hard rule.
 
 ---
 
-### Layer C : Stack Matrix → which language AI codes in
+### Layer C — Stack Matrix → which language AI codes in
 
 Open the **Stack Matrix** tab. One pick per layer.
 
@@ -136,7 +139,7 @@ Open the **Stack Matrix** tab. One pick per layer.
 | Chatbot frontend | Open WebUI · LibreChat · Semantic Kernel + Blazor · Claude Desktop |
 
 > [!TIP]
-> **Real example:** Tech lead picks `C#/.NET` for MCP + Memory + Regression. Asks AI "build me the OdataLink MCP server" —> AI returns C# code, not hallucinations. No guessing.
+> **Real example:** Tech lead picks `C#/.NET` for MCP + Memory + Regression. Asks AI "build me the OdataLink MCP server" — AI returns C# code, not TypeScript. No guessing.
 
 ---
 
@@ -229,7 +232,7 @@ Add to the `"tunables"` array → **Apply** → new slider appears.
 ## 📝 Sample Prompt Templates
 
 <details>
-<summary><b>Template 1: Generate a report</b></summary>
+<summary><b>Template 1 — Generate a report</b></summary>
 
 ````markdown
 [paste AI ctx]
@@ -241,7 +244,7 @@ Run the validator before showing me. If it fails, show me the diff and the sugge
 </details>
 
 <details>
-<summary><b>Template 2: Propose a stack change</b></summary>
+<summary><b>Template 2 — Propose a stack change</b></summary>
 
 ````markdown
 [paste AI ctx]
@@ -253,7 +256,7 @@ I'm considering switching the DB Adapter stack from psycopg to EF Core.
 </details>
 
 <details>
-<summary><b>Template 3: Sanity check the spec</b></summary>
+<summary><b>Template 3 — Sanity check the spec</b></summary>
 
 ````markdown
 [paste AI ctx]
@@ -265,7 +268,7 @@ I'm considering switching the DB Adapter stack from psycopg to EF Core.
 </details>
 
 <details>
-<summary><b>Template 4: Onboard a new team member</b></summary>
+<summary><b>Template 4 — Onboard a new team member</b></summary>
 
 ````markdown
 [paste AI ctx + this README]
@@ -277,7 +280,7 @@ One page. Plain English. Focus on what they can change vs what's locked.
 
 ---
 
-## ⚖️ Before / After - Same Prompt, Different Behavior
+## ⚖️ Before / After — Same Prompt, Different Behavior
 
 | | **Before** (no spec) | **After** (spec attached) |
 |---|---|---|
@@ -298,9 +301,9 @@ Same prompt → wildly different output.
 
 | What you paste | ~Tokens | When to use |
 |---|---|---|
-| Full `design-doc.html` | 10,000 | **Never** waste context |
+| Full `design-doc.html` | 10,000 | **Never** — wastes context |
 | JSON-LD ctx (📋 AI ctx (json)) | 2,000 | Tool-using agents, structured prompts |
-| **Markdown ctx (📋 AI ctx (md))** | **1,500** | **Daily chat work** |
+| **Markdown ctx (📋 AI ctx (md))** | **1,500** | **Daily chat work — best ROI** |
 | This README only | 2,000 | Onboarding humans or AI to the system |
 | README + Markdown ctx | 3,500 | First-time use, deep / unfamiliar tasks |
 
@@ -314,8 +317,8 @@ Same prompt → wildly different output.
 | Symptom | Cause | Fix |
 |---|---|---|
 | AI ignores my settings | Forgot to re-copy ctx after editing | Click **📋 AI ctx (md)** again, paste in a fresh message |
-| Old behavior after slider change | Context isn't live; chat only sees what was pasted | Paste new ctx: *"Updated spec - refer to this from now on"* |
-| Schema Editor "invalid JSON" | Missing comma / unmatched bracket | Lint with [jsonlint.com](https://jsonlint.com) - finds the exact line |
+| Old behavior after slider change | Context isn't live; chat only sees what was pasted | Paste new ctx: *"Updated spec — refer to this from now on"* |
+| Schema Editor "invalid JSON" | Missing comma / unmatched bracket | Lint with [jsonlint.com](https://jsonlint.com) — finds the exact line |
 | Forked doc still has old project name | localStorage changed; HTML not regenerated | Click **💾 Save As HTML** to bake the schema into the file |
 | Teammates don't see my decisions | localStorage is per-browser, per-device | Export state JSON → share file, OR Save As HTML → share file |
 
@@ -378,7 +381,7 @@ Yes, indirectly. Three reasons:
 <details>
 <summary><b>Works with Claude / ChatGPT / Gemini equally?</b></summary>
 
-Yes. Markdown context is plain text (.md). works in any chat. JSON-LD ctx is even better for tool-using agents (Claude Desktop, Cursor, Codex MCP, etc.).
+Yes. Markdown context is plain text — works in any chat. JSON-LD ctx is even better for tool-using agents (Claude Desktop, Cursor, Codex MCP, etc.).
 </details>
 
 <details>
@@ -427,7 +430,7 @@ Yes. No CDN dependencies, no API calls, no telemetry. Pure HTML + vanilla JS. Op
 - **Offline.** Works on air-gapped machines.
 - **Stable.** No supply-chain risk, no CDN outages, no version drift.
 - **Auditable.** ~520 lines of vanilla JS, readable by any engineer.
-- **Trade-off:** ~150 lines of custom CSS you'd save with Pico.css. Opt-in line is commented in the HTML head. Uncomment if you want it.
+- **Trade-off:** ~150 lines of custom CSS you'd save with Pico.css. Opt-in line is commented in the HTML head — uncomment if you want it.
 
 </details>
 
@@ -444,9 +447,37 @@ Same source data, three projections. No duplication.
 
 ---
 
-## 📜 License
+## 📜 License & Scope
 
-MIT
+This repository is licensed under the **[GNU Affero General Public License, version 3 or later (AGPL-3.0-or-later)](./LICENSE)**.
+
+> [!IMPORTANT]
+> **AGPL-3.0 means:**
+> - You may freely use, study, modify, and redistribute this work.
+> - If you distribute or run a **modified** version (including as a network service), you must release your modifications under the same license and provide source to your users.
+> - No part of this license restricts how a user, on their own data, configures or operates their own AI assistant.
+
+**Scope — read this before connecting real data:**
+
+This repository is a **behavior-specification framework**. It does not process, store, transmit, or transform any data, and it does not connect to any third-party service. Every vendor, database, model provider, hosting service, and chatbot frontend named in the schema is an **example**, not an endorsement or a required dependency.
+
+If you connect the framework to any third-party service — Xero, MYOB, QuickBooks, OdataLink, Notion, AWS, Anthropic, OpenAI, a database vendor, a hosting platform, or any other — **you alone are responsible for complying with that service's terms**, fair-use policy, AI/ML restrictions, and any data-handling obligations.
+
+> [!CAUTION]
+> **Xero Developer Platform Terms (effective 2 March 2026)** prohibit using Xero API Data to train, fine-tune, adapt, or enhance any AI/ML model, and prohibit passing API Data to a third party without user consent. This framework operates at **inference time only** and does not authorise or facilitate AI model training on any third-party data. See [DISCLAIMER.md](./DISCLAIMER.md) §4 for the full notice.
+
+**Quick decision guide:**
+
+| Use case | Status |
+|---|---|
+| Fork this repo for your own internal use | ✅ Permitted under AGPL — keep the license |
+| Modify and redistribute as a public project | ✅ Permitted under AGPL — distribute your modifications under AGPL-3.0 |
+| Run a hosted service based on this repo | ⚠️ Permitted but you must share your source with users (AGPL §13) |
+| Embed in a closed-source proprietary product | ❌ Not permitted under AGPL without a separate commercial agreement |
+| Use the framework to configure an AI assistant for your own accounting | ✅ Your data, your tools, your choice — comply with your data providers' terms |
+| Train, fine-tune, or distill an AI model on Xero/MYOB/QB-originated data | ❌ Not permitted under those providers' terms — not authorised by this framework |
+
+**Full scope, user attestation, and third-party terms: [DISCLAIMER.md](./DISCLAIMER.md).**
 
 ---
 
